@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +31,9 @@ import app.opentv.core.RecentChannels
 import app.opentv.core.ServiceLocator
 import app.opentv.data.model.*
 import app.opentv.data.parser.displayTitle
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import app.opentv.ui.VodViewModel
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
@@ -76,15 +78,6 @@ fun TelevisionHomeScreen(
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = System.currentTimeMillis() } }
     val nowFlow = remember(now) { graph.epgRepository.observeNow(now) }
     val programmes by nowFlow.collectAsState(initial = emptyList())
-    val featureSource = selectHomeFeature(presentation.featured, resume.isNotEmpty(), recent.isNotEmpty(), favourites.isNotEmpty(), channels.isNotEmpty())
-    val resumeFeature = resume.firstOrNull().takeIf { featureSource == HomeFeatureSource.CONTINUE }
-    val featured = when (featureSource) {
-        HomeFeatureSource.RECENT -> recent.firstOrNull()
-        HomeFeatureSource.FAVOURITE -> favourites.firstOrNull()
-        HomeFeatureSource.CHANNEL -> channels.firstOrNull()
-        else -> null
-    }
-    val programme = featured?.let { c -> programmes.firstOrNull { it.epgChannelId == (c.epgOverrideId ?: c.matchedEpgId ?: c.epgChannelId) } }
     LaunchedEffect(hasSources) { if (hasSources) vod.loadHomeFeeds() }
 
     MaterialTheme(colorScheme = if (presentation.background == HomeBackground.DEFAULT) MaterialTheme.colorScheme else app.opentv.ui.theme.DarkScheme) {
@@ -111,36 +104,7 @@ fun TelevisionHomeScreen(
                         }
                     }
                     if (presentation.featured != HomeFeatured.DISABLED) item(key = "hero") {
-                        Box(
-                            Modifier.fillMaxWidth().heightIn(min = when (presentation.layout) { HomeLayout.COMPACT -> 160.dp; HomeLayout.CINEMA -> 280.dp; else -> 220.dp }).clip(RoundedCornerShape(22.dp))
-                                .background(Brush.horizontalGradient(listOf(Color(0xFF142E54), Color(0xFF0D213B), Color(0xFF0A172A)))),
-                        ) {
-                            Row(Modifier.fillMaxWidth().padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Text(if (resumeFeature != null) "CONTINUE WATCHING" else if (featured != null) "LIVE · ${featured.shownName}" else "WELCOME TO NUVIX", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-                                    Text(
-                                        resumeFeature?.title ?: programme?.title ?: if (featured != null) "Your next watch starts here." else "Your television. Your way.",
-                                        style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        programme?.description?.takeIf { it.isNotBlank() } ?: if (hasSources) "Discover your live channels, explore your guide, or pick up where you left off." else "Add your authorized IPTV provider to bring your channels, movies, and shows together.",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.widthIn(max = if (presentation.layout == HomeLayout.CINEMA) 650.dp else 550.dp),
-                                    )
-                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        Button(onClick = { if (resumeFeature != null) onResume(resumeFeature.mediaKey, resumeFeature.streamUrl, resumeFeature.title) else if (featured != null) onPlayChannel(featured) else onAddSource() }) {
-                                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(if (resumeFeature != null) "Resume watching" else if (featured != null) "Watch live" else "Add provider")
-                                        }
-                                        OutlinedButton(onClick = onOpenGuide) { Text("Explore guide") }
-                                    }
-                                }
-                                if (featured?.logoUrl != null) {
-                                    AsyncImage(featured.logoUrl, featured.shownName, Modifier.padding(start = 24.dp).size(if (presentation.layout == HomeLayout.CINEMA) 140.dp else 100.dp), contentScale = ContentScale.Fit)
-                                }
-                            }
-                        }
+                        HomeEpgGuideCard(presentation, programmes, channels, now, hasSources, onPlayChannel, onOpenGuide, onAddSource)
                     }
                     val movieShelf = recommended.ifEmpty { movies }
                     order.forEach { key ->
@@ -181,6 +145,124 @@ fun TelevisionHomeScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Hero-slot replacement: a compact clickable EPG guide. Each row is a channel with the programme
+ * currently on, playing straight from home on activation; the footer expands into the full IPTV
+ * guide section.
+ */
+@Composable
+internal fun HomeEpgGuideCard(
+    presentation: HomePresentation,
+    programmes: List<Programme>,
+    channels: List<Channel>,
+    now: Long,
+    hasSources: Boolean,
+    onPlayChannel: (Channel) -> Unit,
+    onOpenGuide: () -> Unit,
+    onAddSource: () -> Unit,
+) {
+    val rowCount = when (presentation.layout) { HomeLayout.COMPACT -> 3; HomeLayout.CINEMA -> 5; else -> 4 }
+    val rows = remember(channels, programmes, rowCount) {
+        val keyOf = { channel: Channel -> channel.epgOverrideId ?: channel.matchedEpgId ?: channel.epgChannelId }
+        val visible = channels.take(32)
+        val withProgramme = visible.map { channel ->
+            val found = programmes.firstOrNull { it.epgChannelId == keyOf(channel) }
+            Triple(channel, found, found != null)
+        }.sortedByDescending { it.third }.map { it.first to it.second }
+        withProgramme.take(rowCount)
+    }
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    Box(
+        Modifier.fillMaxWidth().heightIn(min = when (presentation.layout) { HomeLayout.COMPACT -> 190.dp; HomeLayout.CINEMA -> 300.dp; else -> 240.dp })
+            .clip(RoundedCornerShape(22.dp))
+            .background(Brush.horizontalGradient(listOf(Color(0xFF142E54), Color(0xFF0D213B), Color(0xFF0A172A)))),
+    ) {
+        if (channels.isEmpty()) {
+            Column(
+                Modifier.fillMaxWidth().padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("Your television. Your way.", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(
+                    if (hasSources) "Your provider is being loaded — the channel guide appears here." else "Add your authorized IPTV provider to bring the channel guide here.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!hasSources) Button(onClick = onAddSource) { Text("Add provider") }
+            }
+        } else {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("TV GUIDE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+                        Text("What's on now", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                    Text(timeFormat.format(Date(now)), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+                rows.forEach { (channel, programme) ->
+                    EpgGuideRow(channel, programme, now, timeFormat) { onPlayChannel(channel) }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
+                    FilledTonalButton(onClick = onOpenGuide) {
+                        Icon(Icons.Filled.LiveTv, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Open the full guide")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A single guide row: channel identity, current programme with progress and its airing window. */
+@Composable
+private fun EpgGuideRow(
+    channel: Channel,
+    programme: Programme?,
+    now: Long,
+    timeFormat: SimpleDateFormat,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (focused) 1.015f else 1f, label = "epgGuideRowFocus")
+    Row(
+        Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }
+            .onFocusChanged { focused = it.isFocused }
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (focused) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (channel.logoUrl.isNullOrBlank()) {
+            Icon(Icons.Filled.LiveTv, null, Modifier.size(38.dp).padding(5.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            AsyncImage(channel.logoUrl, channel.shownName, Modifier.size(40.dp), contentScale = ContentScale.Fit)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(channel.shownName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                programme?.title ?: "Live", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            if (programme != null) {
+                LinearProgressIndicator(
+                    progress = { programme.progressAt(now) },
+                    modifier = Modifier.width(90.dp).height(3.dp).clip(RoundedCornerShape(2.dp)),
+                )
+            }
+        }
+        if (programme != null) {
+            Text(
+                "${timeFormat.format(Date(programme.startUtcMillis))} – ${timeFormat.format(Date(programme.endUtcMillis))}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
