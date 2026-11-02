@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Nuvix — guida IPTV stile TiviMate (anteprima)</title>
+<style>
+  :root{
+    --bg:#06101F; --surface:#0A172A; --surfaceVariant:#12233B; --outline:#29415F;
+    --onBg:#E8EAF0; --onVar:#B4C4D9; --primary:#58A6FF; --primaryDim:rgba(88,166,255,.20);
+    --accentDim:#173E77; --err:#FF6B6B; --focusText:#0A0C14;
+  }
+  body{margin:0;background:var(--bg);color:var(--onBg);
+    font-family:"Roboto","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+  #screen{display:flex;height:100vh;overflow:hidden}
+
+  /* ---------- Category rail (240dp, come nell'app) ---------- */
+  .rail{width:240px;min-width:240px;background:var(--surface);padding:16px 10px;box-sizing:border-box}
+  .rail h1{font-size:24px;font-weight:600;margin:0 10px 12px}
+  .rail .entry{padding:9px 12px;border-radius:8px;font-size:15px;color:var(--onVar);
+    margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rail .entry.sel{background:var(--accentDim);color:#E6EAFF;font-weight:600}
+  .rail h2{font-size:11px;color:var(--onVar);opacity:.65;margin:14px 12px 6px;letter-spacing:.6px;text-transform:uppercase}
+
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+
+  /* ---------- Preview pane + ---- */
+  .preview{display:flex;height:212px;margin:12px 16px 12px 12px;flex-shrink:0}
+  .video{width:332px;height:188px;background:#000;border-radius:12px;position:relative;flex-shrink:0}
+  .video::before{content:"";position:absolute;inset:0;border-radius:12px;
+    background:radial-gradient(120% 90% at 30% 20%, rgba(88,166,255,.28), transparent 55%),
+               radial-gradient(100% 80% at 80% 90%, rgba(255,183,77,.12), transparent 60%);}
+  .video .badge{position:absolute;left:10px;bottom:10px;background:rgba(0,0,0,.55);border-radius:8px;
+    padding:4px 8px;font-size:12px;color:#fff}
+  .video .badge i{color:var(--primary);font-style:normal;margin-right:4px}
+  .meta{flex:1;padding:2px 0 0 18px;display:flex;flex-direction:column;min-width:0}
+  .meta .rndot{color:var(--err);font-size:18px;margin-left:auto;padding-right:8px}
+  .meta .rndot span{opacity:.55;font-size:14px;padding:0 6px}
+  .meta .chn{display:flex;align-items:center;gap:12px}
+  .meta .logobox{width:44px;height:44px;border-radius:8px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:17px}
+  .meta .nm{font-size:22px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta .now{font-size:17px;font-weight:600;margin-top:14px}
+  .meta .bar{height:4px;border-radius:2px;background:var(--surfaceVariant);margin-top:8px;position:relative;overflow:hidden}
+  .meta .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--primary);border-radius:2px;display:block}
+  .meta .syn{font-size:14px;color:var(--onVar);margin-top:8px;line-height:1.35;opacity:.9;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .meta .next{margin-top:auto;font-size:14px;color:var(--onVar);opacity:.8}
+
+  /* ---------- Time header: blocchi orari alternati ---------- */
+  .thead{display:flex;height:34px;flex-shrink:0;border-top:1px solid rgba(41,65,95,.4)}
+  .thchan{width:236px;min-width:236px;background:var(--surface);display:flex;align-items:center;padding-left:10px;
+    font-size:14px;color:var(--onVar);font-weight:500;box-sizing:border-box}
+  .thscroll{flex:1;overflow:hidden;position:relative;background:var(--surface)}
+  .thslot{position:absolute;top:0;bottom:0;display:flex;align-items:center;padding-left:6px;
+    font-size:12px;color:var(--onVar);box-sizing:border-box}
+  .thslot.dim{font-size:10px;opacity:.5}
+  .thslot.sh{background:var(--surfaceVariant);opacity:.42}
+
+  /* ---------- Grid: celle piatte su canva scuro ---------- */
+  .gridwrap{flex:1;padding:0 16px 16px 0;overflow:hidden;position:relative}
+  .grid{margin-left:236px;position:relative}
+  .grow{display:flex;height:72px;margin-bottom:3px 0}
+  .grow{margin-bottom:0}
+  .rowspace{height:3px}
+  .chan{width:236px;min-width:236px;background:var(--surface);border-radius:8px;display:flex;
+    align-items:center;padding:0 6px 0 4px;box-sizing:border-box;gap:5px;flex-shrink:0}
+  .chan .num{width:28px;font-size:12px;color:var(--onVar);flex-shrink:0}
+  .chan .logobox{width:34px;height:34px;border-radius:6px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px}
+  .chan .nm{flex:1;font-size:17px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chan .fav{color:var(--onVar);font-size:14px;opacity:.8}
+  .chan.favthis .fav{color:var(--primary);opacity:1}
+
+  .cells{flex:1;position:relative;min-width:0}
+  .cell{position:absolute;top:0;height:72px;background:var(--surface);border-radius:4px;
+    box-sizing:border-box;padding:6px 7px 5px 12px;overflow:hidden}
+  .cell .tr{font-size:10px;color:var(--onVar);opacity:.8;margin-bottom:3px;white-space:nowrap;overflow:hidden}
+  .cell .t{font-size:14px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cell .stripe{position:absolute;left:4px;top:27px;width:3px;height:18px;border-radius:2px}
+  .cell.now{background:var(--primaryDim);border:1px solid rgba(88,166,255,.55)}
+  .cell.now .pg{position:absolute;left:0;bottom:0;height:3px;background:var(--primary)}
+  .cell.focus{background:var(--primary);color:var(--focusText);border:2px solid var(--primary)}
+  .cell.focus .tr{color:rgba(6,16,31,.75)}
+  .cell.focus .stripe{filter:saturate(.25) brightness(1.25)}
+  .cell.focus .pg{background:var(--focusText)}
+  .nowmarker{position:absolute;width:2px;background:var(--err);z-index:30}
+  .hourline{position:absolute;top:0;bottom:0;width:1px;background:var(--outline);opacity:.35}
+</style>
+</head>
+<body>
+<div id="screen">
+
+  <!-- ============ Rail categorie ============ -->
+  <nav class="rail">
+    <h1>Live TV</h1>
+    <div class="entry">Guide options</div>
+    <h2>Sources</h2>
+    <div class="entry sel">All sources</div>
+    <h2>Filters / Categories</h2>
+    <div class="entry">Favourites</div>
+    <div class="entry">All channels</div>
+    <div class="entry">Recent</div>
+    <div class="entry">With EPG</div>
+    <div class="entry">Airing now</div>
+    <h2>Provider categories</h2>
+    <div class="entry">Documentary</div>
+    <div class="entry">Entertainment</div>
+    <div class="entry">Italy · Extra</div>
+    <div class="entry">Movies</div>
+    <div class="entry">News</div>
+    <div class="entry">Sport</div>
+  </nav>
+
+  <!-- ============ Preview + guida ============ -->
+  <section class="main">
+
+    <!-- Anteprima canale in evidenza -->
+    <div class="preview">
+      <div class="video"><div class="badge"><i>▶</i>Watch</div></div>
+      <div class="meta">
+        <div class="chn">
+          <span class="logobox" style="background:linear-gradient(135deg,#1C5FA8,#0d3d75)">R1</span>
+          <span class="nm">Rai Uno HD</span>
+          <span class="rndot"><span>⟳</span><span>＋</span>●</span>
+        </div>
+        <div class="now">14:30–15:45 &nbsp;·&nbsp; Portale di Sicilia — Documentario</div>
+        <div class="bar"><i style="width:62%"></i></div>
+        <div class="syn">La storia e i paesaggi della costa siciliana raccontati attraverso gli occhi degli abitanti: un viaggio tra le barche dei pescatori e i borghi medievali.</div>
+        <div class="next">Next&nbsp;&nbsp;15:45&nbsp;&nbsp;Tg2 regions</div>
+      </div>
+    </div>
+
+    <!-- Header temp -->
+    <div class="thead">
+      <div class="thchan">Channel</div>
+      <div class="thscroll" id="thscroll"></div>
+    </div>
+
+    <!-- ===== Grid ===== -->
+    <div class="gridwrap">
+      <div class="grid" id="grid">
+        <!-- righe generate a mano: 1px = 1dp, hours = 240px -->
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* Genera la griglia: 1px = 1dp, 4dp/minuto (densità "Comfortable"), finestra 14:00–20:00 */
+const MIN = 4, H = 240; // 1h = 240px
+const CAT = { doc:'#64B5F6', sport:'#81C784', ent:'#FFB74D', news:'#4DD0E1', ser:'#BA68C8', info:'#9FA8DA' };
+const CHANNELS = [
+  { n:'Rai Uno HD',    num:7,  bg:'#1C5FA8', ab:'R1', fav:true,  p:[
+      {s:0,   d:30,  t:'La nostra linea',        c:'info'},
+      {s:30,  d:75,  t:'Portale di Sicilia',     c:'doc', now:true, pr:62},
+      {s:105, d:105, t:'Tg2 regions',            c:'news'}]},
+  { n:'Rai Due HD',    num:9,  bg:'#3c6fd1', ab:'R2', fav:false, p:[
+      {s:30,  d:60,  t:'Life Bee',               c:'ent'},
+      {s:90,  d:90,  t:'Rerun Comedy Show',      c:'ent', now:true, pr:20, focus:true},
+      {s:180, d:90,  t:'Meteo e notizie',        c:'news'}]},
+  { n:'Sky Sport 25',  num:25, bg:'#0a2f5f', ab:'SS', fav:false, p:[
+      {s:0,   d:75,  t:'Sport matter',           c:'sport'},
+      {s:75,  d:135, t:'Serie A — highlights',   c:'sport', now:true, pr:40},
+      {s:210, d:150, t:'Copa review',            c:'sport'}]},
+  { n:'Dmax HD',       num:41, bg:'#e0731f', ab:'DM', fav:false, p:[
+      {s:15,  d:120, t:'Mega macchinari',        c:'doc', now:true, pr:72},
+      {s:135, d:120, t:'Science of speed',       c:'doc'},
+      {s:255, d:90,  t:'Progetti incredibili',   c:'doc'}]},
+  { n:'Mediaset Uno',  num:51, bg:'#2b6fc9', ab:'MT', fav:false, p:[
+      {s:0,   d:105, t:"Quiz colpo d'occhio",    c:'ent', now:true, pr:95},
+      {s:105, d:120, t:'Serie della sera ep.7',  c:'ser'}]},
+  { n:'La7',           num:63, bg:'#d33f49', ab:'LA7', fav:false, p:[
+      {s:30,  d:150, t:'Prospettive di oggi',    c:'news', now:true, pr:45},
+      {s:180, d:90,  t:'Teche — episodio 4',     c:'doc'}]},
+];
+const clock = m => `${String(Math.floor((840+m)/60)%24).padStart(2,'0')}:${String((840+m)%60).padStart(2,'0')}`;
+
+/* Header orario: blocchi di un'ora alternati + separatori + marker "now" rosso */
+let hh = '';
+for (let i = 0; i < 12; i++) {
+  const left = i * H / 2, wide = (i % 2 === 0);
+  hh += `<div class="thslot ${i % 4 < 2 ? '' : 'sh'} ${wide ? '' : 'dim'}" style="left:${left}px;width:${H/2}px">${wide ? clock(i * 30) : ''}</div>`;
+}
+for (let i = 1; i <= 5; i++) hh += `<div class="hourline" style="left:${i * H}px"></div>`;
+hh += `<div class="nowmarker" style="left:${102*MIN}px"></div>`;
+document.getElementById('thscroll').innerHTML = hh;
+
+let html = '';
+CHANNELS.forEach(ch => {
+  html += `<div class="grow">
+    <div class="chan${ch.fav?' favthis':''}">
+      <span class="num">${ch.num}</span>
+      <span class="logobox" style="background:${ch.bg}">${ch.ab}</span>
+      <span class="nm">${ch.n}</span><span class="fav">★</span>
+    </div>
+    <div class="gutter" style="width:3px;min-width:3px"></div>
+    <div class="cells">`;
+  for (let i=1;i<=5;i++) html += `<div class="hourline" style="left:${i*H}px"></div>`;
+  html += `<div class="nowmarker" style="left:${102*MIN}px"></div>`;
+  ch.p.forEach(p => {
+    const cls = [p.focus?'focus':(p.now?'now':'')].join(' ');
+    html += `<div class="cell ${cls}" style="left:${p.s*MIN}px;width:${p.d*MIN-3}px">`;
+    if (p.now && !p.focus) html += `<div class="stripe" style="background:${CAT[p.c]};filter:none"></div>`;
+    html += `<div class="tr">${clock(p.s)}–${clock(p.s+p.d)}</div>`;
+    html += `<div class="t">${p.t}</div>`;
+    html += `<div class="stripe" style="background:${CAT[p.c]}"></div>`;
+    if (p.now) html += `<div class="pg" style="width:${p.pr}%"></div>`;
+    html += `</div>`;
+  });
+  html += `</div></div><div class="rowspace"></div>`;
+});
+document.getElementById('grid').innerHTML = html;
+</script>
+</body>
+</html>

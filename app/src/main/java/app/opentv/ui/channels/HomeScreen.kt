@@ -447,7 +447,8 @@ fun HomeScreen(
         }
 
         // ---- Preview + guide ---------------------------------------------------------------
-        Column(Modifier.weight(1f)) {
+        // Darker canvas under the flat TiviMate-style cells, so borders and separators read.
+        Column(Modifier.weight(1f).background(MaterialTheme.colorScheme.background)) {
             if (rows.isEmpty()) {
                 when {
                     favouritesOnly -> NoFavouritesState()

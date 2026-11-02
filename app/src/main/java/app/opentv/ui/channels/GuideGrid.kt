@@ -67,6 +67,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import kotlin.math.abs
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -535,23 +536,65 @@ private fun ChannelListRow(
     }
 }
 
-/** Displays the visible guide timeline's time labels. */
+/**
+ * The visible guide timeline's time labels, TiviMate-style: alternating hour shading with dimmed
+ * half-hour labels, so the eye reads hour blocks at a glance from three metres away.
+ */
 @Composable
 private fun TimeHeader(windowStartMillis: Long, scroll: ScrollState, minuteWidthDp: Float, nowMillis: Long) {
-    Row(Modifier.fillMaxWidth().height(32.dp)) {
+    Row(Modifier.fillMaxWidth().height(34.dp).background(MaterialTheme.colorScheme.surface)) {
         Box(Modifier.width(CHANNEL_COLUMN + 3.dp).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-            Text("Channel", modifier = Modifier.padding(start = 10.dp), style = MaterialTheme.typography.labelLarge)
+            Text(
+                "Channel",
+                modifier = Modifier.padding(start = 10.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        Box(Modifier.horizontalScroll(scroll).background(MaterialTheme.colorScheme.surface)) {
+        Box(Modifier.horizontalScroll(scroll)) {
             Row {
                 repeat(48) { i ->
-                    Box(Modifier.width((30 * minuteWidthDp).dp).height(32.dp).padding(start = 6.dp), contentAlignment = Alignment.CenterStart) {
-                        Text(clockFormat.format(Date(windowStartMillis + i * 30 * 60_000L)), style = MaterialTheme.typography.bodyMedium)
+                    Box(
+                        Modifier
+                            .width((30 * minuteWidthDp).dp)
+                            .height(34.dp)
+                            .background(
+                                if (i % 4 < 2) MaterialTheme.colorScheme.surface
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            )
+                            .padding(start = 6.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Text(
+                            clockFormat.format(Date(windowStartMillis + i * 30 * 60_000L)),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
+            // and the top rail carries them as well, so a separator reads through the head and rows.
+            HourSeparators(minuteWidthDp)
             CurrentTimeMarker(windowStartMillis, nowMillis, minuteWidthDp)
         }
+    }
+}
+
+/**
+ * Vertical gridlines at every hour boundary, aligned with the timeline width. Drawn beneath the
+ * half-hour label blocks in the header and beneath programme cells in the rows, so they read as
+ * one continuous hour column through the whole grid — the subtle scannability of TiviMate.
+ */
+@Composable
+private fun HourSeparators(minuteWidthDp: Float) {
+    repeat(23) { i ->
+        Box(
+            Modifier
+                .offset(x = ((i + 1) * 60 * minuteWidthDp).dp)
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+        )
     }
 }
 
@@ -635,6 +678,8 @@ private fun GuideRow(
             val visibleEnd = guideTimeAtOffset(windowStartMillis, scroll.value / localDensity.density + viewportWidth.value, metrics.minuteWidthDp)
             val visible = visibleGuideSlices(slices, visibleStart, visibleEnd)
             Box(Modifier.horizontalScroll(scroll).width((24 * 60 * metrics.minuteWidthDp).dp).fillMaxHeight()) {
+                // Hour gridlines under the (opaque) cells so they read as continuous columns.
+                HourSeparators(metrics.minuteWidthDp)
                 if (slices.isEmpty()) {
                     Box(Modifier.offset(x = (scroll.value / localDensity.density).dp).width(viewportWidth).fillMaxHeight()
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)).padding(horizontal = 12.dp),
@@ -694,9 +739,12 @@ private fun ProgrammeBlock(
     var focused by remember { mutableStateOf(false) }
     val requester = remember { FocusRequester() }
     val isNow = programme.isLiveAt(nowMillis)
+    // A thin deterministic colour per programme category, the TiviMate signature that lets a
+    // whole row of the grid be identified by hue without a single extra word on screen.
+    val stripe = guideCategoryColor(programme.category)
     val foreground = when {
         focused -> MaterialTheme.colorScheme.onPrimary
-        isNow -> MaterialTheme.colorScheme.onPrimaryContainer
+        isNow -> MaterialTheme.colorScheme.onBackground
         else -> MaterialTheme.colorScheme.onSurface
     }
     val timeRange = "${clockFormat.format(Date(programme.startUtcMillis))}–${clockFormat.format(Date(programme.endUtcMillis))}"
@@ -705,9 +753,17 @@ private fun ProgrammeBlock(
     }
     Box(
         modifier.width(widthDp.coerceAtLeast(1f).dp).fillMaxHeight().padding(end = if (widthDp >= 8f) 3.dp else 0.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(when { focused -> MaterialTheme.colorScheme.primary; isNow -> MaterialTheme.colorScheme.primaryContainer; else -> MaterialTheme.colorScheme.surfaceVariant })
-            .then(if (focused || isNow) Modifier.border(if (focused) 2.dp else 1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp)) else Modifier)
+            .clip(RoundedCornerShape(4.dp))
+            .background(when {
+                focused -> MaterialTheme.colorScheme.primary
+                isNow -> MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+                else -> MaterialTheme.colorScheme.surface
+            })
+            .then(
+                if (focused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+                else if (isNow) Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                else Modifier
+            )
             .focusRequester(requester)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) false else when (event.key) {
@@ -724,6 +780,10 @@ private fun ProgrammeBlock(
             .testTag("guide-programme-${programme.feedId}-${programme.epgChannelId}-${programme.startUtcMillis}"),
     ) {
         Row(Modifier.fillMaxSize().padding(horizontal = if (widthDp >= 24) 8.dp else 0.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (stripe != null && widthDp >= 16f) {
+                Box(Modifier.width(3.dp).height(18.dp).clip(RoundedCornerShape(2.dp)).background(stripe))
+                Spacer(Modifier.width(5.dp))
+            }
             if (layout == GuideLayout.EXPANDED && showArtwork && widthDp >= 180f && !programme.iconUrl.isNullOrBlank()) {
                 ProgrammeArtwork(programme.iconUrl, Modifier.size(48.dp).clip(RoundedCornerShape(4.dp)))
                 Spacer(Modifier.width(8.dp))
@@ -747,6 +807,21 @@ private fun ProgrammeBlock(
         }
     }
 }
+
+/**
+ * A muted accent per programme category, stable for any given name and drawn as a thin stripe in
+ * the cell. Blank categories get no stripe; there is never a reason to invent a color for nothing.
+ */
+private val GuideCategoryPalette = listOf(
+    Color(0xFF64B5F6), Color(0xFF81C784), Color(0xFFFFB74D), Color(0xFFBA68C8),
+    Color(0xFF4DD0E1), Color(0xFFFF8A65), Color(0xFFAED581), Color(0xFF9FA8DA),
+)
+
+/** Stable, deterministic hue for a programme category, or null when there is none. */
+internal fun guideCategoryColor(category: String?): Color? =
+    category?.trim()?.takeIf { it.isNotBlank() }?.let {
+        GuideCategoryPalette[abs(it.lowercase().hashCode()) % GuideCategoryPalette.size]
+    }
 
 /** Draws the current-time indicator within the visible guide window. */
 @Composable
