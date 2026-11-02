@@ -62,6 +62,8 @@ import com.disabledabel.nuvix.R
 import app.opentv.data.model.Episode
 import app.opentv.data.model.Movie
 import app.opentv.data.model.Series
+import app.opentv.data.model.StremioMeta
+import app.opentv.data.model.StremioVideo
 import app.opentv.data.model.StremioStream
 import app.opentv.data.parser.displayTitle
 import app.opentv.ui.VodViewModel
@@ -385,6 +387,201 @@ fun SeriesDetailScreen(
 }
 
 // ---- Shared detail pieces ----------------------------------------------------------------------
+
+// ---- Add-on catalog title detail --------------------------------------------------------------
+
+/**
+ * An add-on catalog title's detail page — reached from the add-on shelves at the top of
+ * Movies/Shows (Easy Catalogs, and anything else declaring catalogs). Poster, synopsis and, for
+ * series, the episode list are read from the add-on's meta; streams resolve straight against
+ * every configured stream add-on using the add-on's own ids — no provider entry and no TMDB key
+ * is involved, which is the point of browsing an add-on's own catalog.
+ */
+@Composable
+fun AddonDetailScreen(
+    type: String,
+    metaId: String,
+    manifestUrl: String,
+    onPlayUrl: (mediaKey: String, url: String, title: String) -> Unit,
+    viewModel: VodViewModel = viewModel(),
+) {
+    var meta by remember(metaId, manifestUrl) { mutableStateOf<StremioMeta?>(null) }
+    var loaded by remember(metaId, manifestUrl) { mutableStateOf(false) }
+    LaunchedEffect(metaId, manifestUrl) {
+        meta = viewModel.addonMeta(manifestUrl, type, metaId)
+        loaded = true
+    }
+
+    // The picker is shared with the provider detail screens: a null list means closed, an empty
+    // list means opened, queried, and no stream came back.
+    var pickerStreams by remember(metaId) { mutableStateOf<List<StremioStream>?>(null) }
+    var pickerLoading by remember(metaId) { mutableStateOf(false) }
+    var pendingKey by remember(metaId) { mutableStateOf("") }
+    var pendingTitle by remember(metaId) { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    val requestStreams: (streamId: String, title: String) -> Unit = { streamId, title ->
+        pendingKey = streamId
+        pendingTitle = title
+        pickerStreams = null
+        pickerLoading = true
+        scope.launch {
+            pickerStreams = viewModel.addonStreamsFor(type, streamId)
+            pickerLoading = false
+        }
+    }
+
+    val m = meta
+    when {
+        !loaded -> LoadingDetail()
+        m == null -> {
+            // The add-on answered empty for this id. Many still resolve streams for it, so a
+            // direct try stays one press away rather than letting the visit become a dead end.
+            Column(
+                Modifier.fillMaxSize().padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+            ) {
+                Text(
+                    stringResource(R.string.vod_addon_detail_missing),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                DetailButton(
+                    icon = Icons.Filled.PlayArrow,
+                    label = stringResource(R.string.vod_watch_now),
+                    primary = true,
+                ) { requestStreams(metaId, metaId) }
+            }
+        }
+        else -> {
+            val playFocus = remember { FocusRequester() }
+            LaunchedEffect(m.id) {
+                delay(60)
+                runCatching { playFocus.requestFocus() }
+            }
+            val seasons = if (type == "series") {
+                m.videos.filter { ep -> ep.streamId != null }
+                    .groupBy { it.season ?: 0 }
+                    .toSortedMap()
+            } else {
+                emptyMap()
+            }
+            LazyColumn(Modifier.fillMaxSize()) {
+                item(key = "header") {
+                    DetailBackdrop(
+                        title = m.name,
+                        backdropUrl = m.backdropUrl,
+                        posterUrl = m.posterUrl,
+                        meta = m.releaseInfo.orEmpty(),
+                    ) {
+                        DetailButton(
+                            icon = Icons.Filled.PlayArrow,
+                            label = stringResource(R.string.vod_watch_now),
+                            primary = true,
+                            modifier = Modifier.focusRequester(playFocus),
+                        ) {
+                            if (type == "series") {
+                                m.videos.firstOrNull { it.streamId != null }?.let { ep ->
+                                    requestStreams(ep.streamId!!, episodeTitle(m, ep))
+                                }
+                            } else {
+                                requestStreams(m.id, m.name)
+                            }
+                        }
+                    }
+                }
+                item(key = "info") {
+                    // Person lookups belong to the provider library this title didn't come from,
+                    // so the cast renders as plain chips without opening anyone.
+                    DetailInfo(
+                        plot = m.description,
+                        cast = m.cast.joinToString(", "),
+                        director = null,
+                        genre = m.genres.joinToString(", "),
+                        onOpenPerson = {},
+                    )
+                }
+                if (type == "series") {
+                    if (seasons.isEmpty()) {
+                        item(key = "noepisodes") {
+                            Text(
+                                stringResource(R.string.vod_addon_no_episodes),
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                            )
+                        }
+                    }
+                    seasons.forEach { (season, eps) ->
+                        item(key = "season:$season") {
+                            Spacer(Modifier.height(8.dp))
+                            SectionHeader(stringResource(R.string.vod_season, season))
+                        }
+                        items(eps, key = { "${it.season}:${it.episode}" }) { ep ->
+                            AddonEpisodeRow(ep) { streamId ->
+                                requestStreams(streamId, episodeTitle(m, ep))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (pickerLoading || pickerStreams != null) {
+        AddonStreamPicker(
+            loading = pickerLoading,
+            streams = pickerStreams.orEmpty(),
+            onPick = { stream ->
+                pickerStreams = null
+                onPlayUrl("addon:$type:$pendingKey", stream.url, pendingTitle)
+            },
+            onDismiss = { pickerStreams = null; pickerLoading = false },
+        )
+    }
+}
+
+/** The player/resume label for an add-on episode: "Film Name · S1E2 · Episode Title". */
+private fun episodeTitle(meta: StremioMeta, ep: StremioVideo): String {
+    val marker = listOfNotNull(
+        ep.season?.let { "S$it" },
+        ep.episode?.let { "E$it" },
+    ).joinToString("")
+    return listOf(meta.name, marker, ep.title.orEmpty())
+        .filter { it.isNotBlank() }
+        .joinToString(" · ")
+}
+
+/** One add-on episode row: a season/episode marker and its title; activation plays it. */
+@Composable
+private fun AddonEpisodeRow(ep: StremioVideo, onPlay: (streamId: String) -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 3.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (focused) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surface,
+            )
+            .then(
+                if (focused) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                else Modifier,
+            )
+            .clickable { ep.streamId?.let(onPlay) }
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "S${ep.season ?: "-"}E${ep.episode ?: "-"}",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.width(72.dp),
+        )
+        Text(ep.title ?: "", style = MaterialTheme.typography.bodyLarge)
+    }
+}
 
 /**
  * The hero header, Plex-style: the poster always shown as an elevated card on the left, with the

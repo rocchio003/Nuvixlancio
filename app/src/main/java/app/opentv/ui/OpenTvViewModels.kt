@@ -28,6 +28,8 @@ import app.opentv.data.model.Series
 import app.opentv.data.model.Source
 import app.opentv.data.model.SourceKind
 import app.opentv.data.model.StremioStream
+import app.opentv.data.model.StremioCatalog
+import app.opentv.data.model.StremioMeta
 import app.opentv.data.model.StreamKind
 import app.opentv.data.parser.displayTitle
 import app.opentv.data.parser.ChannelNameNormalizer
@@ -927,6 +929,86 @@ class VodViewModel(app: Application) : AndroidViewModel(app) {
         selectedVodSource.value = sourceId
         movieCategory.value = null
         seriesCategory.value = null
+    }
+
+    // ---- Add-on catalogs (Easy Catalogs and friends) ----------------------------------------------
+
+    /** One browsable catalog shelf: which add-on hosts it, which feed it serves. */
+    data class AddonCatalogEntry(
+        val addonManifestUrl: String,
+        val addonName: String,
+        val catalog: StremioCatalog,
+    )
+
+    /** The catalog shelves across the configured add-ons, ready to browse inside Movies/Shows. */
+    val addonCatalogs: StateFlow<List<AddonCatalogEntry>> =
+        settings.stremioAddons
+            .map { list ->
+                list.filter { it.catalogs.isNotEmpty() }.flatMap { addon ->
+                    addon.catalogs.map { AddonCatalogEntry(addon.manifestUrl, addon.name, it) }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Manifest URLs already re-read this app run — the once-per-run upgrade guard. */
+    private val addonManifestsRescanned = mutableSetOf<String>()
+
+    /**
+     * Re-reads stored add-on manifests that pre-date catalog support (saved when an add-on was
+     * just a name + URL), so shelves those add-ons declare now surface in Movies/Shows too.
+     * Best-effort and once per manifest per app run; nothing changes when the add-on is offline.
+     */
+    fun ensureAddonCatalogs() {
+        val stale = settings.stremioAddons.value
+            .filter { it.catalogs.isEmpty() }
+            .filter { it.manifestUrl !in addonManifestsRescanned }
+        if (stale.isEmpty()) return
+        viewModelScope.launch {
+            for (addon in stale) {
+                if (addon.manifestUrl in addonManifestsRescanned) continue
+                // Marked even when the read fails, so an offline add-on never spins a retry loop.
+                addonManifestsRescanned.add(addon.manifestUrl)
+                val fresh = withContext(Dispatchers.IO) {
+                    runCatching { graph.stremioClient.fetchAddon(addon.manifestUrl) }.getOrNull()
+                } ?: continue
+                graph.settings.addStremioAddon(fresh) // replaces the stored entry by manifest URL
+            }
+        }
+    }
+
+    /**
+     * One page of an add-on catalog shelf, fetched live from the add-on at browse time. The list
+     * is never persisted — the add-on stays the sole provider and catalog of its own content.
+     */
+    suspend fun addonCatalogItems(entry: AddonCatalogEntry, skip: Int, genre: String?): List<StremioMeta> =
+        runCatching {
+            withContext(Dispatchers.IO) {
+                graph.stremioClient.catalog(entry.addonManifestUrl, entry.catalog.type, entry.catalog.id, skip, genre)
+            }
+        }.getOrDefault(emptyList())
+
+    /** The full meta (and, for series, the episode list) behind an add-on catalog title. */
+    suspend fun addonMeta(manifestUrl: String, type: String, id: String): StremioMeta? =
+        runCatching {
+            withContext(Dispatchers.IO) { graph.stremioClient.meta(manifestUrl, type, id) }
+        }.getOrNull()
+
+    /**
+     * Streams the configured add-ons offer for a title id the add-ons themselves carry — the
+     * `tt…` / `tmdb:…` ids catalog metas arrive with, or the episode id built on the meta's base.
+     * Replies with direct URLs are kept; infoHash-only torrent entries are skipped inside
+     * [app.opentv.data.remote.StremioClient.streams].
+     */
+    suspend fun addonStreamsFor(type: String, id: String): List<StremioStream> {
+        val addons = settings.stremioAddons.value
+        if (addons.isEmpty()) return emptyList()
+        return withContext(Dispatchers.IO) {
+            addons.flatMap { addon ->
+                runCatching {
+                    graph.stremioClient.streams(addon.manifestUrl, addon.name, type, id)
+                }.getOrDefault(emptyList())
+            }
+        }
     }
 
     // ---- Netflix-style home rows ----------------------------------------------------------------

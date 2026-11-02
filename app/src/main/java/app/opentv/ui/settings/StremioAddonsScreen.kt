@@ -79,10 +79,12 @@ class StremioAddonsViewModel(app: Application) : AndroidViewModel(app) {
         if (url.isBlank()) return
         viewModelScope.launch {
             _status.value = Status.Checking
-            val name = withContext(Dispatchers.IO) { graph.stremioClient.fetchManifest(url) }
-            _status.value = if (name != null) {
-                graph.settings.addStremioAddon(StremioAddon(manifestUrl = url, name = name))
-                Status.Added(name)
+            val addon = withContext(Dispatchers.IO) { graph.stremioClient.fetchAddon(url) }
+            _status.value = if (addon != null) {
+                // The full manifest read is stored, catalog shelves included, so Movies/Shows can
+                // browse an add-on's catalogs without another manifest round-trip.
+                graph.settings.addStremioAddon(addon)
+                Status.Added(addon.name)
             } else {
                 Status.Invalid
             }

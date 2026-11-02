@@ -393,6 +393,10 @@
     <string name="vod_addon_pick_title">Scegli uno stream</string>
     <string name="vod_addon_loading">Ricerca di stream dai tuoi add-on…</string>
     <string name="vod_addon_none">Nessuno stream trovato dai tuoi add-on per questo titolo. Serve una chiave TMDB impostata (per la corrispondenza IMDb) e un add-on che lo includa.</string>
+    <string name="vod_addon_shelves">Add-on</string>
+    <string name="vod_addon_catalog_empty">Quel catalogo add-on qui non risponde — prova un\'altra collezione o verifica l\'add-on.</string>
+    <string name="vod_addon_detail_missing">L\'add-on non ha dettagli per questo titolo. Le fonti potrebbero esserci ugualmente: prova a guardarlo.</string>
+    <string name="vod_addon_no_episodes">L\'add-on non elenca episodi per questa serie.</string>
     <string name="vod_more_like_this">Altri simili</string>
     <string name="vod_synopsis">Trama</string>
     <string name="vod_cast">Cast</string>

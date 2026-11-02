@@ -471,6 +471,10 @@
     <string name="vod_addon_pick_title">Choose a stream</string>
     <string name="vod_addon_loading">Finding streams from your add-ons…</string>
     <string name="vod_addon_none">No streams found from your add-ons for this title. It needs a TMDB key set (for the IMDb match) and an add-on that has it.</string>
+    <string name="vod_addon_shelves">Add-on</string>
+    <string name="vod_addon_catalog_empty">That add-on catalog has nothing here — try another shelf, or the add-on may be down.</string>
+    <string name="vod_addon_detail_missing">The add-on has no details for this title. Sources may still be available — try watching.</string>
+    <string name="vod_addon_no_episodes">The add-on lists no episodes for this series.</string>
     <string name="vod_more_like_this">More like this</string>
     <string name="vod_synopsis">Synopsis</string>
     <string name="vod_cast">Cast</string>

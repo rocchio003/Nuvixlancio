@@ -100,6 +100,7 @@ import app.opentv.ui.settings.SettingsHubScreen
 import app.opentv.ui.settings.WebManagerScreen
 import app.opentv.ui.theme.OpenTvTheme
 import app.opentv.ui.vod.MovieDetailScreen
+import app.opentv.ui.vod.AddonDetailScreen
 import app.opentv.ui.vod.PersonScreen
 import app.opentv.ui.vod.SeriesDetailScreen
 import app.opentv.ui.vod.VodPlayerScreen
@@ -315,6 +316,7 @@ object Routes {
     const val UPDATE_SETTINGS = "update-settings"
     const val SERIES_DETAIL = "series/{seriesId}"
     const val MOVIE_DETAIL = "movie/{movieId}"
+    const val ADDON_TITLE = "addon-title/{type}/{metaId}/{manifestUrl}"
     const val EDIT_SOURCE = "edit-source/{sourceId}"
 
     // A person's name goes in a query arg, URL-encoded, so spaces and punctuation survive the round
@@ -331,6 +333,11 @@ object Routes {
     fun seriesDetail(seriesId: Long) = "series/$seriesId"
     /** Builds the detail route for a provider movie row ID. */
     fun movieDetail(movieId: Long) = "movie/$movieId"
+    /** Builds the detail route for an add-on catalog title (URL-encoded parts travel the nav graph). */
+    fun addonTitle(type: String, metaId: String, manifestUrl: String): String {
+        fun e(v: String) = java.net.URLEncoder.encode(v, "UTF-8")
+        return "addon-title/${e(type)}/${e(metaId)}/${e(manifestUrl)}"
+    }
     /** Builds the provider editor route for a source row ID. */
     fun editSource(sourceId: Long) = "edit-source/$sourceId"
     /** Encodes a person identifier for the metadata profile route. */
@@ -673,6 +680,9 @@ private fun NuvixNavigation(
                     onOpenSeries = { series ->
                         navController.navigate(Routes.seriesDetail(series.id))
                     },
+                    onOpenAddonTitle = { type, metaId, manifestUrl ->
+                        navController.navigate(Routes.addonTitle(type, metaId, manifestUrl))
+                    },
                     onResume = { key, url, title ->
                         openVod(
                             Routes.vodPlayer(key, url, title, "Nuvix/0.1 (Android)"),
@@ -934,6 +944,26 @@ private fun NuvixNavigation(
                     onOpenMovie = { movie -> navController.navigate(Routes.movieDetail(movie.id)) },
                     onOpenSeries = { series -> navController.navigate(Routes.seriesDetail(series.id)) },
                     onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.ADDON_TITLE) { entry ->
+                fun arg(name: String) = entry.arguments?.getString(name)
+                    ?.let { java.net.URLDecoder.decode(it, "UTF-8") }.orEmpty()
+                val type = arg("type")
+                val metaId = arg("metaId")
+                val manifestUrl = arg("manifestUrl")
+                if (type.isBlank() || metaId.isBlank() || manifestUrl.isBlank()) return@composable
+                AddonDetailScreen(
+                    type = type,
+                    metaId = metaId,
+                    manifestUrl = manifestUrl,
+                    viewModel = vodViewModel,
+                    onPlayUrl = { key, url, title ->
+                        openVod(
+                            Routes.vodPlayer(key = key, url = url, title = title, ua = "Nuvix/0.1 (Android)"),
+                        )
+                    },
                 )
             }
 

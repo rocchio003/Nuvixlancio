@@ -125,6 +125,7 @@ fun MainScreen(
     onPlayChannel: (Channel) -> Unit,
     onOpenMovie: (Movie) -> Unit,
     onOpenSeries: (Series) -> Unit,
+    onOpenAddonTitle: (type: String, metaId: String, manifestUrl: String) -> Unit,
     onResume: (mediaKey: String, url: String, title: String) -> Unit,
     onAddSource: () -> Unit,
     onRefresh: () -> Unit,
@@ -297,6 +298,7 @@ fun MainScreen(
                         onOpenMovie = onOpenMovie,
                         onResume = onResume,
                         onOpenSearch = onOpenSearch,
+                        onOpenAddonTitle = onOpenAddonTitle,
                         hasSources = hasSources,
                         isSyncing = isSyncing,
                     )
@@ -304,6 +306,7 @@ fun MainScreen(
                         onOpenSeries = onOpenSeries,
                         onResume = onResume,
                         onOpenSearch = onOpenSearch,
+                        onOpenAddonTitle = onOpenAddonTitle,
                         hasSources = hasSources,
                         isSyncing = isSyncing,
                     )

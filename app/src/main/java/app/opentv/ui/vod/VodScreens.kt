@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -42,6 +43,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.disabledabel.nuvix.R
 import app.opentv.data.model.Movie
 import app.opentv.data.model.Series
+import app.opentv.data.model.StremioMeta
 import app.opentv.data.model.Source
 import app.opentv.data.parser.displayTitle
 import app.opentv.ui.VodViewModel
@@ -73,6 +76,7 @@ fun MoviesScreen(
     onOpenMovie: (Movie) -> Unit,
     onResume: (mediaKey: String, url: String, title: String) -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenAddonTitle: (type: String, metaId: String, manifestUrl: String) -> Unit,
     hasSources: Boolean,
     isSyncing: Boolean,
     viewModel: VodViewModel = viewModel(),
@@ -86,16 +90,21 @@ fun MoviesScreen(
     val vodLoading by viewModel.vodLoading.collectAsState()
     val sources by viewModel.sources.collectAsState()
     val selectedSource by viewModel.selectedVodSource.collectAsState()
+    val addonCatalogs by viewModel.addonCatalogs.collectAsState()
+    val movieAddonCatalogs = remember(addonCatalogs) { addonCatalogs.filter { it.catalog.type == "movie" } }
 
     // Pull the movie library the first time this tab is opened, not at login; refresh the computed
     // home rows (recommended, by-genre) on open too — cheap, and covers a library already on disk.
     LaunchedEffect(Unit) {
         if (hasSources) viewModel.ensureVodLoaded()
         viewModel.loadHomeFeeds()
+        viewModel.ensureAddonCatalogs()
     }
 
     // null = the curated home rows; a category id = that category's full grid.
     var browseCategory by remember { mutableStateOf<String?>(null) }
+    // null = the provider's own shelves; an entry = a whole add-on catalog shelf, its own browse.
+    var browseAddon by remember { mutableStateOf<VodViewModel.AddonCatalogEntry?>(null) }
 
     val hasContent = resume.isNotEmpty() || recommended.isNotEmpty() ||
         recentlyAdded.isNotEmpty() || genreRows.isNotEmpty()
@@ -110,16 +119,32 @@ fun MoviesScreen(
                 onSelectSource = { id -> browseCategory = null; viewModel.selectVodSource(id) },
             )
         }
-        CategoryChips(
-            entries = categories.map { it.id to it.name },
-            selected = browseCategory,
-            onSelectHome = { browseCategory = null },
-            onSelectCategory = { id -> browseCategory = id; viewModel.selectMovieCategory(id) },
-        )
+        if (movieAddonCatalogs.isNotEmpty()) {
+            AddonCatalogChips(
+                entries = movieAddonCatalogs,
+                multipleAddons = movieAddonCatalogs.map { it.addonManifestUrl }.distinct().size > 1,
+                selected = browseAddon,
+                onSelect = { browseCategory = null; browseAddon = it },
+            )
+        }
+        if (browseAddon == null) {
+            CategoryChips(
+                entries = categories.map { it.id to it.name },
+                selected = browseCategory,
+                onSelectHome = { browseCategory = null },
+                onSelectCategory = { id -> browseCategory = id; viewModel.selectMovieCategory(id) },
+            )
+        }
         // Weighted so the shelves fill the space under the fixed search + chips header, exactly and
         // unambiguously — the same reason Live TV weights its guide grid.
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
+                browseAddon != null -> AddonCatalogBrowse(
+                    entry = browseAddon!!, viewModel = viewModel,
+                    loadingTitle = stringResource(R.string.vod_loading_movies),
+                    emptyBody = stringResource(R.string.vod_addon_catalog_empty),
+                    onOpenTitle = { meta -> onOpenAddonTitle(meta.type, meta.id, browseAddon!!.addonManifestUrl) },
+                )
                 browseCategory != null -> MovieCategoryGrid(categoryMovies, viewModel, onOpenMovie)
                 !hasContent -> when {
                     vodLoading || isSyncing -> LoadingVod(stringResource(R.string.vod_loading_movies))
@@ -158,6 +183,7 @@ fun SeriesScreen(
     onOpenSeries: (Series) -> Unit,
     onResume: (mediaKey: String, url: String, title: String) -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenAddonTitle: (type: String, metaId: String, manifestUrl: String) -> Unit,
     hasSources: Boolean,
     isSyncing: Boolean,
     viewModel: VodViewModel = viewModel(),
@@ -170,13 +196,17 @@ fun SeriesScreen(
     val vodLoading by viewModel.vodLoading.collectAsState()
     val sources by viewModel.sources.collectAsState()
     val selectedSource by viewModel.selectedVodSource.collectAsState()
+    val addonCatalogs by viewModel.addonCatalogs.collectAsState()
+    val seriesAddonCatalogs = remember(addonCatalogs) { addonCatalogs.filter { it.catalog.type == "series" } }
 
     LaunchedEffect(Unit) {
         if (hasSources) viewModel.ensureVodLoaded()
         viewModel.loadHomeFeeds()
+        viewModel.ensureAddonCatalogs()
     }
 
     var browseCategory by remember { mutableStateOf<String?>(null) }
+    var browseAddon by remember { mutableStateOf<VodViewModel.AddonCatalogEntry?>(null) }
 
     val hasContent = resume.isNotEmpty() || recentlyAdded.isNotEmpty() || genreRows.isNotEmpty()
 
@@ -190,14 +220,30 @@ fun SeriesScreen(
                 onSelectSource = { id -> browseCategory = null; viewModel.selectVodSource(id) },
             )
         }
-        CategoryChips(
-            entries = categories.map { it.id to it.name },
-            selected = browseCategory,
-            onSelectHome = { browseCategory = null },
-            onSelectCategory = { id -> browseCategory = id; viewModel.selectSeriesCategory(id) },
-        )
+        if (seriesAddonCatalogs.isNotEmpty()) {
+            AddonCatalogChips(
+                entries = seriesAddonCatalogs,
+                multipleAddons = seriesAddonCatalogs.map { it.addonManifestUrl }.distinct().size > 1,
+                selected = browseAddon,
+                onSelect = { browseCategory = null; browseAddon = it },
+            )
+        }
+        if (browseAddon == null) {
+            CategoryChips(
+                entries = categories.map { it.id to it.name },
+                selected = browseCategory,
+                onSelectHome = { browseCategory = null },
+                onSelectCategory = { id -> browseCategory = id; viewModel.selectSeriesCategory(id) },
+            )
+        }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
+                browseAddon != null -> AddonCatalogBrowse(
+                    entry = browseAddon!!, viewModel = viewModel,
+                    loadingTitle = stringResource(R.string.vod_loading_shows),
+                    emptyBody = stringResource(R.string.vod_addon_catalog_empty),
+                    onOpenTitle = { meta -> onOpenAddonTitle(meta.type, meta.id, browseAddon!!.addonManifestUrl) },
+                )
                 browseCategory != null -> SeriesCategoryGrid(categorySeries, onOpenSeries)
                 !hasContent -> when {
                     vodLoading || isSyncing -> LoadingVod(stringResource(R.string.vod_loading_shows))
@@ -280,6 +326,133 @@ private fun SeriesCategoryGrid(series: List<Series>, onOpenSeries: (Series) -> U
 }
 
 // ---- Shared shelves ----------------------------------------------------------------------------
+
+// ---- Add-on catalog browsing -------------------------------------------------------------------
+
+/**
+ * The add-on catalog shelf chips, shown above the provider's own category chips. A chip opens an
+ * add-on's own feed — "Netflix Top 10", "In Theaters" — and choosing the active chip again
+ * returns to the curated rows, the same gesture the category chips honor.
+ */
+@Composable
+private fun AddonCatalogChips(
+    entries: List<VodViewModel.AddonCatalogEntry>,
+    multipleAddons: Boolean,
+    selected: VodViewModel.AddonCatalogEntry?,
+    onSelect: (VodViewModel.AddonCatalogEntry?) -> Unit,
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        item(key = "label") {
+            Text(
+                stringResource(R.string.vod_addon_shelves),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 4.dp),
+            )
+        }
+        items(entries, key = { "${it.addonManifestUrl}|${it.catalog.id}" }) { entry ->
+            val label = if (multipleAddons && entry.addonName.isNotBlank()) {
+                "${entry.addonName} · ${entry.catalog.name}"
+            } else {
+                entry.catalog.name
+            }
+            Chip(label, selected == entry) { onSelect(if (selected == entry) null else entry) }
+        }
+    }
+}
+
+/** The manifest's selector options for one shelf (genres / years / trending windows), shown while that shelf is open. */
+@Composable
+private fun AddonGenreChips(options: List<String>, selected: String?, onSelect: (String?) -> Unit) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        item(key = "all") { Chip(stringResource(R.string.vod_all), selected == null, { onSelect(null) }) }
+        items(options, key = { it }) { option ->
+            Chip(option, selected == option) { onSelect(if (selected == option) null else option) }
+        }
+    }
+}
+
+/**
+ * One add-on catalog shelf, browsed live from the add-on: a paginated poster grid that fetches
+ * the next page when the user nears the end of what's loaded. Nothing is cached or persisted —
+ * the add-on is consulted on every browse, and a page that only repeats ids already shown is
+ * taken as the shelf's end (pagination extras are an add-on courtesy, not a guarantee).
+ */
+@Composable
+private fun AddonCatalogBrowse(
+    entry: VodViewModel.AddonCatalogEntry,
+    viewModel: VodViewModel,
+    loadingTitle: String,
+    emptyBody: String,
+    onOpenTitle: (StremioMeta) -> Unit,
+) {
+    var genre by remember(entry) { mutableStateOf<String?>(null) }
+
+    var items by remember(entry, genre) { mutableStateOf<List<StremioMeta>>(emptyList()) }
+    var loading by remember(entry, genre) { mutableStateOf(true) }
+    var shelfEnd by remember(entry, genre) { mutableStateOf(false) }
+
+    LaunchedEffect(entry, genre) {
+        loading = true
+        items = viewModel.addonCatalogItems(entry, 0, genre)
+        shelfEnd = false
+        loading = false
+    }
+
+    val gridState = rememberLazyGridState()
+    // Near the end of the loaded shelf → fetch the next page. The derived value re-reads items
+    // on every composition pass through [items.size]'s key, so a grown list resets the trigger
+    // and one page appends per approach to the edge.
+    val nearEnd by remember(items.size) {
+        derivedStateOf {
+            val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            items.isNotEmpty() && last >= items.size - 8
+        }
+    }
+    LaunchedEffect(nearEnd, entry, genre) {
+        if (!nearEnd || loading || shelfEnd) return@LaunchedEffect
+        val page = viewModel.addonCatalogItems(entry, items.size, genre)
+        val fresh = page.filter { added -> items.none { it.id == added.id } }
+        if (fresh.isEmpty()) shelfEnd = true else items = items + fresh
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        if (entry.catalog.genres.isNotEmpty()) {
+            AddonGenreChips(options = entry.catalog.genres, selected = genre) { genre = it }
+        }
+        when {
+            loading && items.isEmpty() -> LoadingVod(loadingTitle)
+            items.isEmpty() -> Row(Modifier.fillMaxWidth().padding(24.dp)) {
+                Text(emptyBody, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            else -> LazyVerticalGrid(
+                state = gridState,
+                columns = GridCells.Adaptive(minSize = 140.dp),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                gridItems(items, key = { "${it.type}|${it.id}" }) { meta ->
+                    PosterCard(
+                        title = meta.name,
+                        posterUrl = meta.posterUrl,
+                        subtitle = meta.releaseInfo,
+                        onClick = { onOpenTitle(meta) },
+                    )
+                }
+            }
+        }
+    }
+}
 
 /** A titled horizontal shelf of movie poster cards. Shared by the home and the detail's "more like this". */
 @Composable
