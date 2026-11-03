@@ -139,7 +139,8 @@ class MainActivity : ComponentActivity() {
                 // A living-room screen defaults to dark; a phone/tablet follows the system.
                 AppSettings.ThemeMode.SYSTEM -> isTelevision || isSystemInDarkTheme()
             }
-            OpenTvTheme(darkTheme = darkTheme) {
+            val accent = settings?.accentColor?.collectAsState()?.value ?: AppSettings.AccentColor.OCEAN
+            OpenTvTheme(darkTheme = darkTheme, accent = accent) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,

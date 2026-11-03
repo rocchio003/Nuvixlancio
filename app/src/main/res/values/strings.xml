@@ -474,6 +474,14 @@
     <string name="vod_addon_shelves">Add-on</string>
     <string name="vod_addon_catalog_empty">That add-on catalog has nothing here — try another shelf, or the add-on may be down.</string>
     <string name="nav_vod">Movies &amp; Series</string>
+    <string name="settings_accent_title">Highlight color</string>
+    <string name="settings_accent_note">Changes focus, selection and highlight colors across the app. Backgrounds stay dark so the TV picture is never washed out.</string>
+    <string name="settings_accent_ocean">Ocean blue</string>
+    <string name="settings_accent_violet">Violet</string>
+    <string name="settings_accent_emerald">Emerald</string>
+    <string name="settings_accent_amber">Amber</string>
+    <string name="settings_accent_ruby">Ruby</string>
+    <string name="settings_accent_graphite">Graphite</string>
     <string name="vod_addon_setup_title">No add-ons yet</string>
     <string name="vod_addon_setup_body">Add a Stremio add-on in Settings (Add-ons) to browse its movies and series here.</string>
     <string name="vod_addon_detail_missing">The add-on has no details for this title. Sources may still be available — try watching.</string>

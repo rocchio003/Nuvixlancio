@@ -396,6 +396,14 @@
     <string name="vod_addon_shelves">Add-on</string>
     <string name="vod_addon_catalog_empty">Quel catalogo add-on qui non risponde — prova un\'altra collezione o verifica l\'add-on.</string>
     <string name="nav_vod">Film e Serie</string>
+    <string name="settings_accent_title">Colore principale</string>
+    <string name="settings_accent_note">Cambia i colori di focus, selezione ed evidenziazione in tutta l\'app. Gli sfondi restano scuri, così l\'immagine TV non viene mai sbiadita.</string>
+    <string name="settings_accent_ocean">Blu oceano</string>
+    <string name="settings_accent_violet">Viola</string>
+    <string name="settings_accent_emerald">Smeraldo</string>
+    <string name="settings_accent_amber">Ambra</string>
+    <string name="settings_accent_ruby">Rubino</string>
+    <string name="settings_accent_graphite">Grafite</string>
     <string name="vod_addon_setup_title">Nessun add-on</string>
     <string name="vod_addon_setup_body">Aggiungi un add-on Stremio nelle Impostazioni (Add-on) per sfogliarne film e serie qui.</string>
     <string name="vod_addon_detail_missing">L\'add-on non ha dettagli per questo titolo. Le fonti potrebbero esserci ugualmente: prova a guardarlo.</string>

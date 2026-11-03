@@ -7,8 +7,11 @@
 package app.opentv.ui.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -41,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -48,6 +53,7 @@ import android.content.Context
 import android.widget.Toast
 import com.disabledabel.nuvix.R
 import app.opentv.core.AppSettings
+import app.opentv.ui.theme.accentPreviewColor
 import app.opentv.core.SleepTimer
 import app.opentv.core.findActivity
 import app.opentv.data.work.SyncWorker
@@ -68,6 +74,7 @@ fun AppSettingsScreen(onBack: () -> Unit, onClearDiagnostics: () -> Unit = {}) {
     val context = LocalContext.current
     val settings = remember { AppSettings.get(context) }
     val themeMode by settings.themeMode.collectAsState()
+    val accent by settings.accentColor.collectAsState()
     val channelLayout by settings.channelLayout.collectAsState()
     val previewVideo by settings.guidePreviewVideo.collectAsState()
     val previewSound by settings.guidePreviewSound.collectAsState()
@@ -120,6 +127,24 @@ fun AppSettingsScreen(onBack: () -> Unit, onClearDiagnostics: () -> Unit = {}) {
             Spacer(Modifier.height(4.dp))
             Text(
                 stringResource(R.string.settings_theme_note),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                stringResource(R.string.settings_accent_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            AccentRow(AppSettings.AccentColor.OCEAN, R.string.settings_accent_ocean, accent) { settings.setAccentColor(it) }
+            AccentRow(AppSettings.AccentColor.VIOLET, R.string.settings_accent_violet, accent) { settings.setAccentColor(it) }
+            AccentRow(AppSettings.AccentColor.EMERALD, R.string.settings_accent_emerald, accent) { settings.setAccentColor(it) }
+            AccentRow(AppSettings.AccentColor.AMBER, R.string.settings_accent_amber, accent) { settings.setAccentColor(it) }
+            AccentRow(AppSettings.AccentColor.RUBY, R.string.settings_accent_ruby, accent) { settings.setAccentColor(it) }
+            AccentRow(AppSettings.AccentColor.GRAPHITE, R.string.settings_accent_graphite, accent) { settings.setAccentColor(it) }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                stringResource(R.string.settings_accent_note),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -445,6 +470,34 @@ private fun ThemeOption(label: String, selected: Boolean, onSelect: () -> Unit) 
         RadioButton(selected = selected, onClick = onSelect)
         Spacer(Modifier.width(8.dp))
         Text(label, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+/** A theme accent choice, with a swatch of the real highlight color beside the name. */
+@Composable
+private fun AccentRow(
+    color: AppSettings.AccentColor,
+    labelRes: Int,
+    selected: AppSettings.AccentColor,
+    onSelect: (AppSettings.AccentColor) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected == color, onClick = { onSelect(color) })
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected == color, onClick = { onSelect(color) })
+        Spacer(Modifier.width(8.dp))
+        Box(
+            Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(accentPreviewColor(color)),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(stringResource(labelRes), style = MaterialTheme.typography.titleMedium)
     }
 }
 

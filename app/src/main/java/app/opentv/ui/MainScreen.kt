@@ -73,7 +73,6 @@ import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.VideoLibrary
 import app.opentv.ui.home.TelevisionHomeScreen
-import app.opentv.ui.home.SportsScreen
 import app.opentv.ui.home.LibraryScreen
 import app.opentv.launcher.AppsScreen
 import app.opentv.launcher.LauncherSettingsStore
@@ -101,7 +100,6 @@ import app.opentv.ui.vod.AddonVodScreen
 enum class Tab(val labelRes: Int, val icon: ImageVector) {
     HOME(R.string.nav_home, Icons.Filled.Home),
     GUIDE(R.string.nav_guide, Icons.Filled.CalendarMonth),
-    SPORTS(R.string.nav_sports, Icons.Filled.SportsSoccer),
     APPS(R.string.nav_apps, Icons.Filled.Apps),
     VOD(R.string.nav_vod, Icons.Filled.Movie),
     RECORDINGS(R.string.nav_library, Icons.Filled.VideoLibrary),
@@ -155,7 +153,6 @@ fun MainScreen(
             add(Tab.HOME)
             if (liveEnabled) add(Tab.GUIDE)
             if (moviesEnabled || seriesEnabled) add(Tab.VOD)
-            if (liveEnabled) add(Tab.SPORTS)
             add(Tab.APPS)
             add(Tab.RECORDINGS)
         }
@@ -209,7 +206,7 @@ fun MainScreen(
 
     LaunchedEffect(tab) {
         onLivePresentation(
-            if (tab in listOf(Tab.HOME, Tab.GUIDE, Tab.SPORTS)) LivePresentation.BROWSING
+            if (tab in listOf(Tab.HOME, Tab.GUIDE)) LivePresentation.BROWSING
             else LivePresentation.HIDDEN,
             tab == Tab.GUIDE,
         )
@@ -261,18 +258,12 @@ fun MainScreen(
                     MultiViewCompactPreview(multiViewManager, onFocusMultiView = { onOpenMultiView?.invoke(null) })
                 } else TextButton(onClick = { onOpenMultiView?.invoke(null) }) { Text("Focus Multi-View") }
             }
-            if (tab == Tab.HOME || tab == Tab.SPORTS) {
+            if (tab == Tab.HOME) {
                 LivePlaybackPreview(liveSession, onFullscreen = onReturnToLive)
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (tab) {
                     Tab.HOME -> TelevisionHomeScreen(hasSources, onPlayChannel, onOpenMovie, onOpenSeries, onResume, onAddSource, { tab = Tab.GUIDE }, { tab = Tab.APPS })
-                    Tab.SPORTS -> SportsScreen(onPlayChannel, onAddToMultiView = addToMultiView,
-                        onReplaceMultiViewPanel = replaceMultiViewPanel,
-                        onPlaySportsChannel = { eventId, channel ->
-                            if (!multiViewActive) liveSession.openSportsChannel(eventId, channel.id)
-                            onPlayChannel(channel)
-                        })
                     Tab.APPS -> AppsScreen(onBack = { tab = Tab.HOME }, onLauncherSettings = onOpenLauncherSettings)
                     Tab.GUIDE -> HomeScreen(
                         isTelevision = isTelevision,

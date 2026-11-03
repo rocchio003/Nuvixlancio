@@ -43,6 +43,15 @@ class AppSettings private constructor(context: Context) {
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
     /**
+     * The accent the app paints its focus, selection and highlight states with. The neutral
+     * near-black surfaces stay put, so a warmer accent never washes out a dark living room.
+     */
+    enum class AccentColor { OCEAN, VIOLET, EMERALD, AMBER, RUBY, GRAPHITE }
+
+    private val _accentColor = MutableStateFlow(readAccentColor())
+    val accentColor: StateFlow<AccentColor> = _accentColor.asStateFlow()
+
+    /**
      * How the live-TV channel list is laid out: the scrolling EPG time-[ChannelLayout.GRID], or a
      * compact one-channel-per-row [ChannelLayout.LIST] (logo, name, now/next) for people who find
      * the full grid busy. Defaults to the grid.
@@ -343,6 +352,12 @@ class AppSettings private constructor(context: Context) {
         _themeMode.value = mode
     }
 
+    /** Persists the accent color preference and updates its observable value. */
+    fun setAccentColor(color: AccentColor) {
+        prefs.edit().putString(KEY_ACCENT, color.name).apply()
+        _accentColor.value = color
+    }
+
     /** Persists the channel layout preference and updates its observable value. */
     fun setChannelLayout(layout: ChannelLayout) {
         prefs.edit().putString(KEY_CHANNEL_LAYOUT, layout.name).apply()
@@ -543,6 +558,11 @@ class AppSettings private constructor(context: Context) {
         runCatching { ThemeMode.valueOf(prefs.getString(KEY_THEME, null) ?: "") }
             .getOrDefault(ThemeMode.SYSTEM)
 
+    /** Reads the saved accent color with a default for unsupported values. */
+    private fun readAccentColor(): AccentColor =
+        runCatching { AccentColor.valueOf(prefs.getString(KEY_ACCENT, null) ?: "") }
+            .getOrDefault(AccentColor.OCEAN)
+
     /** Reads the saved channel layout with a default for unsupported values. */
     private fun readChannelLayout(): ChannelLayout =
         runCatching { ChannelLayout.valueOf(prefs.getString(KEY_CHANNEL_LAYOUT, null) ?: "") }
@@ -714,6 +734,7 @@ class AppSettings private constructor(context: Context) {
         private const val KEY_AUTO_EPG = "automatic_epg"
         private const val KEY_EPG_SUPPRESSED = "epg_suppressed_feed_hashes"
         private const val KEY_THEME = "theme_mode"
+        private const val KEY_ACCENT = "accent_color"
         private const val KEY_CHANNEL_LAYOUT = "channel_layout"
         private const val KEY_GUIDE_LAYOUT = "guide_layout"
         private const val KEY_GUIDE_DENSITY = "guide_density"
