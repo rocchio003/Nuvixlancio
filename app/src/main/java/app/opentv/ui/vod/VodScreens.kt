@@ -66,6 +66,54 @@ import app.opentv.ui.VodViewModel
 import coil.compose.AsyncImage
 
 /**
+ * The single "Film e Serie" tab, fed only by Stremio add-ons: every movie and series catalog from
+ * the add-ons the user added, shown together and opened straight onto the first one. Nothing from
+ * the provider's own library is shown here.
+ */
+@Composable
+fun AddonVodScreen(
+    onOpenSearch: () -> Unit,
+    onOpenAddonTitle: (type: String, id: String, manifestUrl: String) -> Unit,
+    showMovies: Boolean = true,
+    showSeries: Boolean = true,
+    viewModel: VodViewModel = viewModel(),
+) {
+    val catalogs by viewModel.addonCatalogs.collectAsState()
+    LaunchedEffect(Unit) { viewModel.ensureAddonCatalogs() }
+    val addonCatalogs = remember(catalogs, showMovies, showSeries) {
+        catalogs.filter { (it.catalog.type == "movie" && showMovies) || (it.catalog.type == "series" && showSeries) }
+    }
+
+    var picked by remember { mutableStateOf<VodViewModel.AddonCatalogEntry?>(null) }
+    val current = picked?.takeIf { it in addonCatalogs } ?: addonCatalogs.firstOrNull()
+
+    Column(Modifier.fillMaxSize()) {
+        SearchAffordance(onOpenSearch)
+        if (current == null) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                EmptyVod(stringResource(R.string.vod_addon_setup_title), stringResource(R.string.vod_addon_setup_body))
+            }
+        } else {
+            AddonCatalogChips(
+                entries = addonCatalogs,
+                multipleAddons = addonCatalogs.map { it.addonManifestUrl }.distinct().size > 1,
+                selected = current,
+                onSelect = { if (it != null) picked = it },
+            )
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                AddonCatalogBrowse(
+                    entry = current,
+                    viewModel = viewModel,
+                    loadingTitle = stringResource(R.string.vod_loading_movies),
+                    emptyBody = stringResource(R.string.vod_addon_catalog_empty),
+                    onOpenTitle = { meta -> onOpenAddonTitle(meta.type, meta.id, current.addonManifestUrl) },
+                )
+            }
+        }
+    }
+}
+
+/**
  * Movies: a modern, row-based home — Continue Watching, Recommended, Recently added and a row per
  * genre, each a horizontally-scrolling shelf of poster cards. A category chip strip along the top
  * keeps whole-category browsing one press away without a permanent rail eating the width. Clicking

@@ -90,8 +90,7 @@ import app.opentv.data.model.Recording
 import app.opentv.data.model.Series
 import app.opentv.ui.channels.HomeScreen
 import app.opentv.ui.recordings.RecordingsScreen
-import app.opentv.ui.vod.MoviesScreen
-import app.opentv.ui.vod.SeriesScreen
+import app.opentv.ui.vod.AddonVodScreen
 
 /**
  * The shell: a slim navigation rail down the left over a content area. The rail sits collapsed as
@@ -104,8 +103,7 @@ enum class Tab(val labelRes: Int, val icon: ImageVector) {
     GUIDE(R.string.nav_guide, Icons.Filled.CalendarMonth),
     SPORTS(R.string.nav_sports, Icons.Filled.SportsSoccer),
     APPS(R.string.nav_apps, Icons.Filled.Apps),
-    MOVIES(R.string.nav_movies, Icons.Filled.Movie),
-    SHOWS(R.string.nav_shows, Icons.Filled.Tv),
+    VOD(R.string.nav_vod, Icons.Filled.Movie),
     RECORDINGS(R.string.nav_library, Icons.Filled.VideoLibrary),
 }
 
@@ -156,8 +154,7 @@ fun MainScreen(
         buildList {
             add(Tab.HOME)
             if (liveEnabled) add(Tab.GUIDE)
-            if (moviesEnabled) add(Tab.MOVIES)
-            if (seriesEnabled) add(Tab.SHOWS)
+            if (moviesEnabled || seriesEnabled) add(Tab.VOD)
             if (liveEnabled) add(Tab.SPORTS)
             add(Tab.APPS)
             add(Tab.RECORDINGS)
@@ -292,21 +289,11 @@ fun MainScreen(
                         onAddToMultiView = addToMultiView,
                         onReplaceMultiViewPanel = replaceMultiViewPanel,
                     )
-                    Tab.MOVIES -> MoviesScreen(
-                        onOpenMovie = onOpenMovie,
-                        onResume = onResume,
+                    Tab.VOD -> AddonVodScreen(
                         onOpenSearch = onOpenSearch,
                         onOpenAddonTitle = onOpenAddonTitle,
-                        hasSources = hasSources,
-                        isSyncing = isSyncing,
-                    )
-                    Tab.SHOWS -> SeriesScreen(
-                        onOpenSeries = onOpenSeries,
-                        onResume = onResume,
-                        onOpenSearch = onOpenSearch,
-                        onOpenAddonTitle = onOpenAddonTitle,
-                        hasSources = hasSources,
-                        isSyncing = isSyncing,
+                        showMovies = moviesEnabled,
+                        showSeries = seriesEnabled,
                     )
                     Tab.RECORDINGS -> LibraryScreen(onPlayRecording, onPlayChannel, onOpenMovie, onResume)
                 }
