@@ -84,6 +84,10 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE hidden = 0 ORDER BY favourite DESC, sortIndex, displayName LIMIT :limit")
     fun observeHomeChannels(limit: Int = 24): Flow<List<Channel>>
 
+    /** Every visible channel in home/guide order, for the home EPG card that scrolls the whole list. */
+    @Query("SELECT * FROM channels WHERE hidden = 0 ORDER BY favourite DESC, sortIndex, displayName")
+    fun observeVisibleChannels(): Flow<List<Channel>>
+
     /** Observes visible channels matching the supplied local row IDs. */
     @Query("SELECT * FROM channels WHERE id IN (:ids) AND hidden = 0")
     fun observeByIds(ids: List<Long>): Flow<List<Channel>>

@@ -104,7 +104,6 @@ enum class Tab(val labelRes: Int, val icon: ImageVector) {
     GUIDE(R.string.nav_guide, Icons.Filled.CalendarMonth),
     SPORTS(R.string.nav_sports, Icons.Filled.SportsSoccer),
     APPS(R.string.nav_apps, Icons.Filled.Apps),
-    LIVE(R.string.nav_live_tv, Icons.Filled.LiveTv),
     MOVIES(R.string.nav_movies, Icons.Filled.Movie),
     SHOWS(R.string.nav_shows, Icons.Filled.Tv),
     RECORDINGS(R.string.nav_library, Icons.Filled.VideoLibrary),
@@ -156,7 +155,7 @@ fun MainScreen(
     val visibleTabs = remember(liveEnabled, moviesEnabled, seriesEnabled) {
         buildList {
             add(Tab.HOME)
-            if (liveEnabled) { add(Tab.LIVE); add(Tab.GUIDE) }
+            if (liveEnabled) add(Tab.GUIDE)
             if (moviesEnabled) add(Tab.MOVIES)
             if (seriesEnabled) add(Tab.SHOWS)
             if (liveEnabled) add(Tab.SPORTS)
@@ -180,7 +179,7 @@ fun MainScreen(
         }
     } else null
     DisposableEffect(multiViewManager, tab) {
-        multiViewManager?.setGuideOpen(tab == Tab.GUIDE || tab == Tab.LIVE)
+        multiViewManager?.setGuideOpen(tab == Tab.GUIDE)
         onDispose { multiViewManager?.setGuideOpen(false) }
     }
     var startupApplied by rememberSaveable { mutableStateOf(false) }
@@ -193,8 +192,7 @@ fun MainScreen(
         if (startupApplied) return@LaunchedEffect
         startupApplied = true
         tab = when (launcherSettings.preferences.value.startupDestination) {
-            StartupDestination.LIVE_TV, StartupDestination.LAST_WATCHED -> Tab.LIVE
-            StartupDestination.GUIDE -> Tab.GUIDE
+            StartupDestination.LIVE_TV, StartupDestination.LAST_WATCHED, StartupDestination.GUIDE -> Tab.GUIDE
             StartupDestination.APPS -> Tab.APPS
             else -> Tab.HOME
         }.takeIf { it in visibleTabs } ?: Tab.HOME
@@ -214,9 +212,9 @@ fun MainScreen(
 
     LaunchedEffect(tab) {
         onLivePresentation(
-            if (tab in listOf(Tab.HOME, Tab.GUIDE, Tab.LIVE, Tab.SPORTS)) LivePresentation.BROWSING
+            if (tab in listOf(Tab.HOME, Tab.GUIDE, Tab.SPORTS)) LivePresentation.BROWSING
             else LivePresentation.HIDDEN,
-            tab == Tab.GUIDE || tab == Tab.LIVE,
+            tab == Tab.GUIDE,
         )
     }
 
@@ -261,7 +259,7 @@ fun MainScreen(
         )
 
         Column(Modifier.weight(1f).fillMaxHeight()) {
-            if (multiViewActive && multiViewManager != null && (tab == Tab.GUIDE || tab == Tab.LIVE)) {
+            if (multiViewActive && multiViewManager != null && tab == Tab.GUIDE) {
                 if (multiViewPreferences.compactGuide) {
                     MultiViewCompactPreview(multiViewManager, onFocusMultiView = { onOpenMultiView?.invoke(null) })
                 } else TextButton(onClick = { onOpenMultiView?.invoke(null) }) { Text("Focus Multi-View") }
@@ -279,7 +277,7 @@ fun MainScreen(
                             onPlayChannel(channel)
                         })
                     Tab.APPS -> AppsScreen(onBack = { tab = Tab.HOME }, onLauncherSettings = onOpenLauncherSettings)
-                    Tab.LIVE, Tab.GUIDE -> HomeScreen(
+                    Tab.GUIDE -> HomeScreen(
                         isTelevision = isTelevision,
                         liveSession = liveSession,
                         onReturnToLive = onReturnToLive,
@@ -289,7 +287,7 @@ fun MainScreen(
                         onAddSource = onAddSource,
                         onRefresh = onRefresh,
                         onPlayCatchup = onPlayCatchup,
-                        layoutOverride = if (tab == Tab.GUIDE) AppSettings.ChannelLayout.GRID else AppSettings.ChannelLayout.LIST,
+                        layoutOverride = AppSettings.ChannelLayout.GRID,
                         multiViewActive = multiViewActive,
                         onAddToMultiView = addToMultiView,
                         onReplaceMultiViewPanel = replaceMultiViewPanel,

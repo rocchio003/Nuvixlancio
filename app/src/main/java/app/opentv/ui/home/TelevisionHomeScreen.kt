@@ -68,7 +68,7 @@ fun TelevisionHomeScreen(
     val recentFlow = remember(ids) { graph.database.channels().observeByIds(ids) }
     val recentRaw by recentFlow.collectAsState(initial = emptyList())
     val recent = remember(ids, recentRaw) { ids.mapNotNull { id -> recentRaw.firstOrNull { it.id == id } } }
-    val channels by remember { graph.database.channels().observeHomeChannels() }.collectAsState(initial = emptyList())
+    val channels by remember { graph.database.channels().observeVisibleChannels() }.collectAsState(initial = emptyList())
     val favourites by remember { graph.database.channels().observeFavourites() }.collectAsState(initial = emptyList())
     val resume by vod.continueWatching.collectAsState()
     val recommended by vod.recommendedMovies.collectAsState()
@@ -165,19 +165,17 @@ internal fun HomeEpgGuideCard(
     onOpenGuide: () -> Unit,
     onAddSource: () -> Unit,
 ) {
-    val rowCount = when (presentation.layout) { HomeLayout.COMPACT -> 3; HomeLayout.CINEMA -> 5; else -> 4 }
-    val rows = remember(channels, programmes, rowCount) {
+    // Every channel from the synced M3U source, with the programme on now; channels that have a
+    // programme are listed first. The card scrolls, so the whole list is reachable.
+    val rows = remember(channels, programmes) {
         val keyOf = { channel: Channel -> channel.epgOverrideId ?: channel.matchedEpgId ?: channel.epgChannelId }
-        val visible = channels.take(32)
-        val withProgramme = visible.map { channel ->
-            val found = programmes.firstOrNull { it.epgChannelId == keyOf(channel) }
-            Triple(channel, found, found != null)
-        }.sortedByDescending { it.third }.map { it.first to it.second }
-        withProgramme.take(rowCount)
+        val byEpgId = programmes.associateBy { it.epgChannelId }
+        channels.map { channel -> channel to byEpgId[keyOf(channel)] }
+            .sortedByDescending { it.second != null }
     }
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     Box(
-        Modifier.fillMaxWidth().heightIn(min = when (presentation.layout) { HomeLayout.COMPACT -> 190.dp; HomeLayout.CINEMA -> 300.dp; else -> 240.dp })
+        Modifier.fillMaxWidth().height(when (presentation.layout) { HomeLayout.COMPACT -> 300.dp; HomeLayout.CINEMA -> 420.dp; else -> 360.dp })
             .clip(RoundedCornerShape(22.dp))
             .background(Brush.horizontalGradient(listOf(Color(0xFF142E54), Color(0xFF0D213B), Color(0xFF0A172A)))),
     ) {
@@ -195,7 +193,7 @@ internal fun HomeEpgGuideCard(
                 if (!hasSources) Button(onClick = onAddSource) { Text("Add provider") }
             }
         } else {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("TV GUIDE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
@@ -203,8 +201,10 @@ internal fun HomeEpgGuideCard(
                     }
                     Text(timeFormat.format(Date(now)), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
-                rows.forEach { (channel, programme) ->
-                    EpgGuideRow(channel, programme, now, timeFormat) { onPlayChannel(channel) }
+                LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    items(rows, key = { it.first.id }) { (channel, programme) ->
+                        EpgGuideRow(channel, programme, now, timeFormat) { onPlayChannel(channel) }
+                    }
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
                     FilledTonalButton(onClick = onOpenGuide) {
